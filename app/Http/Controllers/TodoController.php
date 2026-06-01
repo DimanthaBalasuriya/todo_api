@@ -49,7 +49,7 @@ class TodoController extends Controller
         ]);
 
         return response()->json([
-            'success'=> true,
+            'success' => true,
             'message' => 'Todo created Successfully',
             'data' => new TodoResource($todo),
         ], 201);
@@ -65,8 +65,8 @@ class TodoController extends Controller
         }
 
         return response()->json([
-            'success'=> true,
-            'message'=> 'Todo fetched Successfully',
+            'success' => true,
+            'message' => 'Todo fetched Successfully',
             'data' => new TodoResource($todo)
         ]);
     }
@@ -105,11 +105,98 @@ class TodoController extends Controller
     {
         $user = JWTAuth::parseToken()->authenticate();
         $todo = Todo::where('user_id', $user->id)->findOrFail($id);
+
         $todo->delete();
 
         return response()->json([
-            'success' => true, 
-            'message' => 'Todo deleted Successfully',
+            'success' => true,
+            'message' => 'Todo move to trash Successfully',
+        ]);
+    }
+
+    public function restore($id)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+        $todo = Todo::withTrashed()->find($id);
+
+        if (! $todo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Todo not found',
+            ], 404);
+        }
+
+        if ($todo->user_id !== $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Not authorized to restore this todo',
+            ], 403);
+        }
+
+        if (! $todo->trashed()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Todo is not in trash',
+            ], 400);
+        }
+
+        $todo->restore();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Todo restored Successfully',
+            'data' => new TodoResource($todo),
+        ]);
+    }
+
+    public function forceDelete($id)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+        $todo = Todo::withTrashed()->find($id);
+
+        if (! $todo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Todo not found',
+            ], 404);
+        }
+
+        if ($todo->user_id !== $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Not authorized to delete this todo',
+            ], 403);
+        }
+
+        if (! $todo->trashed()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Todo is not in trash. Soft-delete it first.',
+            ], 400);
+        }
+
+        // Delete associated image if exists
+        if ($todo->image) {
+            Storage::disk('public')->delete($todo->image);
+        }
+
+        $todo->forceDelete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Todo permanently deleted Successfully',
+        ]);
+    }
+
+    public function trash()
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+        $todos = Todo::onlyTrashed()->where('user_id', $user->id)->latest()->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Trashed todos fetched Successfully',
+            'data' => TodoResource::collection($todos),
         ]);
     }
 

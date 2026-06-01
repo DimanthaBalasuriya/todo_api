@@ -25,7 +25,7 @@ class StoreTodoRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'image' => ['nullable', 'image', 'max:2048'], // Optional image upload, max size 2MB
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'], // Optional image upload, max size 2MB
         ];
     }
 }
