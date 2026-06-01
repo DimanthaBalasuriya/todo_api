@@ -1,8 +1,9 @@
-<?php 
+<?php
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\TodoController;
+use App\Http\Controllers\AdminController;
 
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -19,3 +20,9 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/todos/{id}', [TodoController::class, 'destroy']);
 });
 
+Route::middleware(['auth:api', 'admin'])->group(function () {
+    Route::get('/admin/users', [AdminController::class, 'users']);
+    Route::get('/admin/todos', [AdminController::class, 'todos']);
+    Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser']);
+    Route::delete('/admin/todos/{id}', [AdminController::class, 'deleteTodo']);
+});
