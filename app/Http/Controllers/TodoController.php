@@ -70,8 +70,18 @@ class TodoController extends Controller
         $todo = Todo::where('user_id', $user->id)->findOrFail($id);
 
         if ($request->hasFile('image')) {
-            $this->deleteImage($todo->image);
-            $todo->image = $this->storeImage($request);
+            // Store the new image first. Only delete the old image if the new one stored successfully.
+            $newImagePath = $this->storeImage($request);
+
+            if ($newImagePath) {
+                $this->deleteImage($todo->image);
+                $todo->image = $newImagePath;
+            } else {
+                Log::warning('Todo image update: failed to store new image, keeping existing image.', [
+                    'todo_id' => $todo->id,
+                    'user_id' => $user->id,
+                ]);
+            }
         }
 
         $todo->title = $request->title ?? $todo->title;
