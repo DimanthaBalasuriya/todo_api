@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\UserAll;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
 {
@@ -22,12 +21,13 @@ class AuthController extends Controller
             'password' => Hash::make($request->password)
         ]);
 
-        $token = JWTAuth::fromUser($user);
+        $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
             'message' => 'User registered successfully',
             'user' => $user,
-            'token' => $token
+            'token' => $token,
+            'token_type' => 'Bearer',
         ], 201);
     }
 
@@ -35,15 +35,21 @@ class AuthController extends Controller
     {
         $credentials = $request->only('email', 'password');
 
-        if (!$token = JWTAuth::attempt($credentials)) {
+        $user = User::where('email', $credentials['email'])->first();
+
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             return response()->json([
                 'message' => 'Invalid Credentials'
             ], 401);
         }
 
+        $token = $user->createToken('auth-token')->plainTextToken;
+
         return response()->json([
             'message' => 'User logged in successfully',
-            'token' => $token
+            'token' => $token,
+            'token_type' => 'Bearer',
+            'user' => $user,
         ], 200);
     }
 
@@ -57,14 +63,20 @@ class AuthController extends Controller
         ], 200);
     }
 
-    public function profile()
+    public function profile(Request $request)
     {
-
-        $user = JWTAuth::parseToken()->authenticate();
-
         return response()->json([
             'message' => 'User profile',
-            'user' => $user
+            'user' => $request->user()
+        ], 200);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()?->currentAccessToken()?->delete();
+
+        return response()->json([
+            'message' => 'User logged out successfully',
         ], 200);
     }
 

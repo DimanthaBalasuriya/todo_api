@@ -9,8 +9,9 @@ use App\Http\Controllers\AdminController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
-Route::middleware('auth:api')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
+    Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/users', [AuthController::class, 'users']);
 
 
@@ -25,7 +26,7 @@ Route::middleware('auth:api')->group(function () {
 
 });
 
-Route::middleware(['auth:api', 'admin'])->group(function () {
+Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::get('/admin/users', [AdminController::class, 'users']);
     Route::get('/admin/todos', [AdminController::class, 'todos']);
     Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser']);

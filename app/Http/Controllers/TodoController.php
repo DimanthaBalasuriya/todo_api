@@ -7,16 +7,15 @@ use Illuminate\Http\Request;
 use App\Models\Todo;
 use App\Http\Requests\StoreTodoRequest;
 use App\Http\Requests\UpdateTodoRequest;
-use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Storage;
 use App\Http\Resources\TodoResource;
 
 class TodoController extends Controller
 {
 
-    public function index()
+    public function index(Request $request)
     {
-        $user = JWTAuth::parseToken()->authenticate();
+        $user = $request->user();
         $todos = Todo::where('user_id', $user->id)->latest()->get()->map(function ($todo) {
             if ($todo->image) {
                 $todo->image_url = Storage::disk('public')->url($todo->image);
@@ -32,7 +31,7 @@ class TodoController extends Controller
 
     public function store(StoreTodoRequest $request)
     {
-        $user = JWTAuth::parseToken()->authenticate();
+        $user = $request->user();
 
         $imagePath = null;
 
@@ -55,9 +54,9 @@ class TodoController extends Controller
         ], 201);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        $user = JWTAuth::parseToken()->authenticate();
+        $user = $request->user();
         $todo = Todo::where('user_id', $user->id)->findOrFail($id);
 
         if ($todo->image) {
@@ -73,7 +72,7 @@ class TodoController extends Controller
 
     public function update(UpdateTodoRequest $request, $id)
     {
-        $user = JWTAuth::parseToken()->authenticate();
+        $user = $request->user();
 
         $todo = Todo::where('user_id', $user->id)->findOrFail($id);
 
@@ -101,9 +100,9 @@ class TodoController extends Controller
         ]);
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $user = JWTAuth::parseToken()->authenticate();
+        $user = $request->user();
         $todo = Todo::where('user_id', $user->id)->findOrFail($id);
 
         $todo->delete();
@@ -114,9 +113,9 @@ class TodoController extends Controller
         ]);
     }
 
-    public function restore($id)
+    public function restore(Request $request, $id)
     {
-        $user = JWTAuth::parseToken()->authenticate();
+        $user = $request->user();
         $todo = Todo::withTrashed()->find($id);
 
         if (! $todo) {
@@ -149,9 +148,9 @@ class TodoController extends Controller
         ]);
     }
 
-    public function forceDelete($id)
+    public function forceDelete(Request $request, $id)
     {
-        $user = JWTAuth::parseToken()->authenticate();
+        $user = $request->user();
         $todo = Todo::withTrashed()->find($id);
 
         if (! $todo) {
@@ -188,9 +187,9 @@ class TodoController extends Controller
         ]);
     }
 
-    public function trash()
+    public function trash(Request $request)
     {
-        $user = JWTAuth::parseToken()->authenticate();
+        $user = $request->user();
         $todos = Todo::onlyTrashed()->where('user_id', $user->id)->latest()->get();
 
         return response()->json([
