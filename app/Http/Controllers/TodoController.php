@@ -128,7 +128,22 @@ class TodoController extends Controller
             $todo->completed = (bool) $request->completed;
         }
 
-        $todo->save();
+        // Debug: record model state before save
+        try {
+            Log::info('Todo before save', ['todo' => $todo->toArray()]);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to log todo before save', ['error' => $e->getMessage()]);
+        }
+
+        $saved = $todo->save();
+
+        // Debug: record model state after save
+        try {
+            Log::info('Todo save result', ['saved' => $saved]);
+            Log::info('Todo after save', ['todo' => $todo->fresh()->toArray()]);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to log todo after save', ['error' => $e->getMessage()]);
+        }
 
         return response()->json([
             'success' => true,
