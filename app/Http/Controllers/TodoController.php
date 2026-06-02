@@ -9,6 +9,7 @@ use App\Http\Requests\StoreTodoRequest;
 use App\Http\Requests\UpdateTodoRequest;
 use Illuminate\Support\Facades\Storage;
 use App\Http\Resources\TodoResource;
+use Illuminate\Support\Facades\File;
 
 class TodoController extends Controller
 {
@@ -36,7 +37,17 @@ class TodoController extends Controller
         $imagePath = null;
 
         if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('todo_images', 'public');
+            $image = $request->file('image');
+
+            // 1. Generate a completely unique filename to avoid overwriting files
+            $filename = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+
+            // 2. Move the file physically to the public/todo_images directory
+            $image->move(public_path('todo_images'), $filename);
+
+            // 3. Save the path string that matches your desired web URL 
+            // This will save as: "/todo_images/filename.png"
+            $imagePath = '/todo_images/' . $filename;
         }
 
         $todo = Todo::create([
@@ -44,7 +55,7 @@ class TodoController extends Controller
             'title' => $request->title,
             'description' => $request->description,
             'completed' => false,
-            'image' => $imagePath,
+            'image' => $imagePath, // Saves the clean web path
         ]);
 
         return response()->json([
@@ -77,20 +88,35 @@ class TodoController extends Controller
         $todo = Todo::where('user_id', $user->id)->findOrFail($id);
 
         if ($request->hasFile('image')) {
-            // Delete old image if exists
+            // 1. Delete the old image if it exists in the public directory
             if ($todo->image) {
-                Storage::disk('public')->delete($todo->image);
+                // $todo->image contains "/todo_images/filename.png"
+                // public_path($todo->image) converts it to the full server path
+                $oldImagePath = public_path($todo->image);
+
+                if (File::exists($oldImagePath)) {
+                    File::delete($oldImagePath);
+                }
             }
-            // Store new image
-            $todo->image = $request->file('image')->store('todo_images', 'public');
+
+            // 2. Process and store the new image directly into public/todo_images
+            $image = $request->file('image');
+            $filename = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+            $image->move(public_path('todo_images'), $filename);
+
+            // 3. Update the path string for the database
+            $todo->image = '/todo_images/' . $filename;
         }
 
+        // Only update fields if they are provided in the request
         $todo->title = $request->title ?? $todo->title;
         $todo->description = $request->description ?? $todo->description;
-        $todo->completed = $request->completed ?? $todo->completed;
 
-        // Use $request->validated() instead of $request->all()
-        // This ensures only validated fields are sent to the DB
+        // Explicitly check for null/presence because 'completed' is a boolean (false evaluates to falsy)
+        if ($request->has('completed')) {
+            $todo->completed = $request->completed;
+        }
+
         $todo->save();
 
         return response()->json([
@@ -99,7 +125,6 @@ class TodoController extends Controller
             'data' => new TodoResource($todo),
         ]);
     }
-
     public function destroy(Request $request, $id)
     {
         $user = $request->user();
@@ -118,7 +143,7 @@ class TodoController extends Controller
         $user = $request->user();
         $todo = Todo::withTrashed()->find($id);
 
-        if (! $todo) {
+        if (!$todo) {
             return response()->json([
                 'success' => false,
                 'message' => 'Todo not found',
@@ -132,7 +157,7 @@ class TodoController extends Controller
             ], 403);
         }
 
-        if (! $todo->trashed()) {
+        if (!$todo->trashed()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Todo is not in trash',
@@ -153,7 +178,7 @@ class TodoController extends Controller
         $user = $request->user();
         $todo = Todo::withTrashed()->find($id);
 
-        if (! $todo) {
+        if (!$todo) {
             return response()->json([
                 'success' => false,
                 'message' => 'Todo not found',
@@ -167,7 +192,7 @@ class TodoController extends Controller
             ], 403);
         }
 
-        if (! $todo->trashed()) {
+        if (!$todo->trashed()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Todo is not in trash. Soft-delete it first.',
