@@ -32,6 +32,7 @@ class TodoController extends Controller
 
     public function store(StoreTodoRequest $request)
     {
+        // Get the authenticated user
         $user = $request->user();
 
         $imagePath = null;
