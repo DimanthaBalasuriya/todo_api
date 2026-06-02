@@ -70,6 +70,24 @@ class TodoController extends Controller
 
         $todo = Todo::where('user_id', $user->id)
             ->findOrFail($id);
+        // Debug: log resolved R2/S3 disk config and relevant env vars to help diagnose null bucket issues.
+        try {
+            $r2Config = config('filesystems.disks.r2', []);
+            Log::info('Resolved r2 disk config for update()', [
+                'bucket' => $r2Config['bucket'] ?? null,
+                'endpoint' => $r2Config['endpoint'] ?? null,
+                'url' => $r2Config['url'] ?? null,
+            ]);
+
+            Log::info('Environment values for R2/AWS keys', [
+                'R2_BUCKET_NAME' => env('R2_BUCKET_NAME'),
+                'AWS_BUCKET' => env('AWS_BUCKET'),
+                'R2_ENDPOINT' => env('R2_ENDPOINT'),
+                'AWS_ENDPOINT' => env('AWS_ENDPOINT'),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to log r2 config for debugging', ['error' => $e->getMessage()]);
+        }
 
         // Handle image update
         if ($request->hasFile('image')) {
