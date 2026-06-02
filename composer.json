@@ -3,10 +3,13 @@
     "name": "laravel/laravel",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
     "license": "MIT",
     "require": {
-        "php": "^8.3",
+        "php": "^8.3.31",
         "laravel/framework": "^13.8",
         "laravel/tinker": "^3.0",
         "laravel/sanctum": "^4.0"
@@ -74,6 +77,9 @@
         }
     },
     "config": {
+        "platform": {
+            "php": "8.3.31"
+        },
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
