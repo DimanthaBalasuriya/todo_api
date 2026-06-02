@@ -8,6 +8,7 @@ use App\Http\Resources\TodoResource;
 use App\Models\Todo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -190,13 +191,35 @@ class TodoController extends Controller
     private function storeImage(Request $request): ?string
     {
         if (!$request->hasFile('image')) {
+            Log::info('Todo image upload skipped: request has no image file.');
             return null;
         }
 
         $image = $request->file('image');
-        $filename = now()->format('YmdHis') . '_' . Str::uuid() . '.' . $image->getClientOriginalExtension();
+        Log::info('Todo image upload received.', [
+            'original_name' => $image->getClientOriginalName(),
+            'mime_type' => $image->getClientMimeType(),
+            'size' => $image->getSize(),
+            'disk' => self::IMAGE_DISK,
+        ]);
 
-        return $image->storePubliclyAs(self::IMAGE_DIRECTORY, $filename, self::IMAGE_DISK);
+        $filename = now()->format('YmdHis') . '_' . Str::uuid() . '.' . $image->getClientOriginalExtension();
+        $storedPath = $image->storePubliclyAs(self::IMAGE_DIRECTORY, $filename, self::IMAGE_DISK);
+
+        if (!$storedPath) {
+            Log::warning('Todo image upload failed during storage.', [
+                'filename' => $filename,
+                'disk' => self::IMAGE_DISK,
+            ]);
+            return null;
+        }
+
+        Log::info('Todo image uploaded to storage.', [
+            'stored_path' => $storedPath,
+            'public_url' => Storage::disk(self::IMAGE_DISK)->url($storedPath),
+        ]);
+
+        return Storage::disk(self::IMAGE_DISK)->url($storedPath);
     }
 
     private function deleteImage(?string $path): void
@@ -206,7 +229,13 @@ class TodoController extends Controller
         }
 
         if (filter_var($path, FILTER_VALIDATE_URL)) {
-            return;
+            $parsedPath = parse_url($path, PHP_URL_PATH);
+
+            if (!$parsedPath) {
+                return;
+            }
+
+            $path = ltrim($parsedPath, '/');
         }
 
         $normalizedPath = ltrim($path, '/');
@@ -221,6 +250,8 @@ class TodoController extends Controller
             return;
         }
 
-        Storage::disk(self::IMAGE_DISK)->delete($normalizedPath);
+        if (str_starts_with($normalizedPath, self::IMAGE_DIRECTORY . '/')) {
+            Storage::disk(self::IMAGE_DISK)->delete($normalizedPath);
+        }
     }
 }
