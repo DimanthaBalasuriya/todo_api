@@ -19,7 +19,8 @@ class TodoController extends Controller
         $user = $request->user();
         $todos = Todo::where('user_id', $user->id)->latest()->get()->map(function ($todo) {
             if ($todo->image) {
-                $todo->image_url = Storage::disk('public')->url($todo->image);
+                $path = ltrim($todo->image, '/');
+                $todo->image_url = asset($path);
             }
             return $todo;
         });
@@ -72,7 +73,8 @@ class TodoController extends Controller
         $todo = Todo::where('user_id', $user->id)->findOrFail($id);
 
         if ($todo->image) {
-            $todo->image_url = Storage::disk('public')->url($todo->image);
+            $path = ltrim($todo->image, '/');
+            $todo->image_url = asset($path);
         }
 
         return response()->json([
@@ -202,7 +204,10 @@ class TodoController extends Controller
 
         // Delete associated image if exists
         if ($todo->image) {
-            Storage::disk('public')->delete($todo->image);
+            $oldPath = public_path($todo->image);
+            if (File::exists($oldPath)) {
+                File::delete($oldPath);
+            }
         }
 
         $todo->forceDelete();
