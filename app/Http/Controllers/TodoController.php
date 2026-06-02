@@ -89,32 +89,29 @@ class TodoController extends Controller
             Log::warning('Failed to log r2 config for debugging', ['error' => $e->getMessage()]);
         }
 
-        // Handle image update
+        // Debug: log incoming request keys and values for title/description (do not log files)
+        try {
+            Log::info('Todo update request payload', [
+                'keys' => array_keys($request->all()),
+                'title_present' => $request->has('title'),
+                'description_present' => $request->has('description'),
+                'title_value' => $request->input('title'),
+                'description_value' => $request->input('description'),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to log update request payload', ['error' => $e->getMessage()]);
+        }
+
+        // Handle image update: use the same helper as `store()` to ensure consistent path/URL handling.
         if ($request->hasFile('image')) {
+            $newImageUrl = $this->storeImage($request);
 
-            $file = $request->file('image');
+            if ($newImageUrl) {
+                // Delete old image using deleteImage helper which handles URLs and local paths.
+                $this->deleteImage($todo->image);
 
-            // Upload new image to R2
-            $newImagePath = Storage::disk('r2')->putFile('todos', $file);
-
-            if ($newImagePath) {
-
-                // Delete old image (if exists)
-                if (!empty($todo->image)) {
-                    try {
-                        Storage::disk('r2')->delete($todo->image);
-                    } catch (\Exception $e) {
-                        Log::warning('Failed to delete old R2 image', [
-                            'todo_id' => $todo->id,
-                            'old_image' => $todo->image,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-                }
-
-                // Save new path in DB
-                $todo->image = $newImagePath;
-
+                // Save the public URL returned by storeImage()
+                $todo->image = $newImageUrl;
             } else {
                 Log::error('R2 image upload failed during update', [
                     'todo_id' => $todo->id,
