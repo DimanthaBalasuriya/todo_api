@@ -20,6 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/todos', [TodoController::class, 'store']);
     Route::get('/todos/{id}', [TodoController::class, 'show']);
     Route::put('/todos/{id}', [TodoController::class, 'update']);
+    Route::patch('/todos/{id}', [TodoController::class, 'update']);
     Route::delete('/todos/{id}', [TodoController::class, 'destroy']);
     Route::delete('/todos/{id}/force', [TodoController::class, 'forceDelete']);
     Route::post('/todos/{id}/restore', [TodoController::class, 'restore']);
