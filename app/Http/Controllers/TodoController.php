@@ -67,38 +67,96 @@ class TodoController extends Controller
     public function update(UpdateTodoRequest $request, $id)
     {
         $user = $request->user();
-        $todo = Todo::where('user_id', $user->id)->findOrFail($id);
 
+        $todo = Todo::where('user_id', $user->id)
+            ->findOrFail($id);
+
+        // Handle image update
         if ($request->hasFile('image')) {
-            // Store the new image first. Only delete the old image if the new one stored successfully.
-            $newImagePath = $this->storeImage($request);
+
+            $file = $request->file('image');
+
+            // Upload new image to R2
+            $newImagePath = Storage::disk('r2')->putFile('todos', $file);
 
             if ($newImagePath) {
-                $this->deleteImage($todo->image);
+
+                // Delete old image (if exists)
+                if (!empty($todo->image)) {
+                    try {
+                        Storage::disk('r2')->delete($todo->image);
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to delete old R2 image', [
+                            'todo_id' => $todo->id,
+                            'old_image' => $todo->image,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                // Save new path in DB
                 $todo->image = $newImagePath;
+
             } else {
-                Log::warning('Todo image update: failed to store new image, keeping existing image.', [
+                Log::error('R2 image upload failed during update', [
                     'todo_id' => $todo->id,
                     'user_id' => $user->id,
                 ]);
             }
         }
 
+        // Update other fields
         $todo->title = $request->title ?? $todo->title;
         $todo->description = $request->description ?? $todo->description;
 
         if ($request->has('completed')) {
-            $todo->completed = $request->completed;
+            $todo->completed = (bool) $request->completed;
         }
 
         $todo->save();
 
         return response()->json([
             'success' => true,
-            'message' => 'Todo updated Successfully',
+            'message' => 'Todo updated successfully',
             'data' => new TodoResource($todo),
         ]);
     }
+
+    // public function update(UpdateTodoRequest $request, $id)
+    // {
+    //     $user = $request->user();
+    //     $todo = Todo::where('user_id', $user->id)->findOrFail($id);
+
+    //     if ($request->hasFile('image')) {
+    //         // Store the new image first. Only delete the old image if the new one stored successfully.
+    //         $newImagePath = $this->storeImage($request);
+
+    //         if ($newImagePath) {
+    //             $this->deleteImage($todo->image);
+    //             $todo->image = $newImagePath;
+    //         } else {
+    //             Log::warning('Todo image update: failed to store new image, keeping existing image.', [
+    //                 'todo_id' => $todo->id,
+    //                 'user_id' => $user->id,
+    //             ]);
+    //         }
+    //     }
+
+    //     $todo->title = $request->title ?? $todo->title;
+    //     $todo->description = $request->description ?? $todo->description;
+
+    //     if ($request->has('completed')) {
+    //         $todo->completed = $request->completed;
+    //     }
+
+    //     $todo->save();
+
+    //     return response()->json([
+    //         'success' => true,
+    //         'message' => 'Todo updated Successfully',
+    //         'data' => new TodoResource($todo),
+    //     ]);
+    // }
 
     public function destroy(Request $request, $id)
     {
