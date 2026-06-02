@@ -13,8 +13,9 @@ use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 class AuthController extends Controller
 {
     //
-    
-    public function register(RegisterRequest $request) {
+
+    public function register(RegisterRequest $request)
+    {
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
@@ -30,14 +31,15 @@ class AuthController extends Controller
         ], 201);
     }
 
-    public function login(LoginRequest $request) {
-       $credentials = $request->only('email', 'password');
+    public function login(LoginRequest $request)
+    {
+        $credentials = $request->only('email', 'password');
 
-       if(!$token = JWTAuth::attempt($credentials)) {
+        if (!$token = JWTAuth::attempt($credentials)) {
             return response()->json([
-                'message' => 'Invalid email or password'
+                'message' => 'Invalid Credentials'
             ], 401);
-       }
+        }
 
         return response()->json([
             'message' => 'User logged in successfully',
@@ -45,7 +47,8 @@ class AuthController extends Controller
         ], 200);
     }
 
-    public function users(UserAll $request) {
+    public function users(UserAll $request)
+    {
         $users = User::all();
 
         return response()->json([
@@ -54,10 +57,11 @@ class AuthController extends Controller
         ], 200);
     }
 
-    public function profile(){
+    public function profile()
+    {
 
         $user = JWTAuth::parseToken()->authenticate();
-        
+
         return response()->json([
             'message' => 'User profile',
             'user' => $user
