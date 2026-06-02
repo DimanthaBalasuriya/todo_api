@@ -2,26 +2,27 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Todo;
 use App\Http\Requests\StoreTodoRequest;
 use App\Http\Requests\UpdateTodoRequest;
 use App\Http\Resources\TodoResource;
+use App\Models\Todo;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class TodoController extends Controller
 {
+    private const IMAGE_DISK = 'r2';
+    private const IMAGE_DIRECTORY = 'todos';
+
     public function index(Request $request)
     {
         $user = $request->user();
-        $todos = Todo::where('user_id', $user->id)->latest()->get()->map(function ($todo) {
-            if ($todo->image) {
-                // FIXED: Bypass asset() filesystem handling entirely.
-                // We manually stitch your base APP_URL to the clean path stored in the database.
-                $todo->image_url = rtrim(config('app.url'), '/') . $todo->image;
-            }
-            return $todo;
-        });
+
+        $todos = Todo::where('user_id', $user->id)
+            ->latest()
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -33,20 +34,7 @@ class TodoController extends Controller
     public function store(StoreTodoRequest $request)
     {
         $user = $request->user();
-        $imagePath = null;
-
-        if ($request->hasFile('image')) {
-            $image = $request->file('image');
-
-            // 1. Generate a completely unique filename
-            $filename = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
-
-            // 2. Move the file physically to the public/todo_images directory
-            $image->move(public_path('todo_images'), $filename);
-
-            // 3. Save the clean path matching your symbolic link setup
-            $imagePath = '/todo_images/' . $filename;
-        }
+        $imagePath = $this->storeImage($request);
 
         $todo = Todo::create([
             'user_id' => $user->id,
@@ -55,11 +43,6 @@ class TodoController extends Controller
             'completed' => false,
             'image' => $imagePath,
         ]);
-
-        // Build URL dynamically for the immediate resource response
-        if ($todo->image) {
-            $todo->image_url = rtrim(config('app.url'), '/') . $todo->image;
-        }
 
         return response()->json([
             'success' => true,
@@ -73,15 +56,10 @@ class TodoController extends Controller
         $user = $request->user();
         $todo = Todo::where('user_id', $user->id)->findOrFail($id);
 
-        if ($todo->image) {
-            // FIXED: Avoid asset() storage auto-append
-            $todo->image_url = rtrim(config('app.url'), '/') . $todo->image;
-        }
-
         return response()->json([
             'success' => true,
             'message' => 'Todo fetched Successfully',
-            'data' => new TodoResource($todo)
+            'data' => new TodoResource($todo),
         ]);
     }
 
@@ -91,21 +69,8 @@ class TodoController extends Controller
         $todo = Todo::where('user_id', $user->id)->findOrFail($id);
 
         if ($request->hasFile('image')) {
-            // 1. Delete old image from public directory
-            if ($todo->image) {
-                $oldImagePath = public_path($todo->image);
-                if (File::exists($oldImagePath)) {
-                    File::delete($oldImagePath);
-                }
-            }
-
-            // 2. Process and store new image directly into public/todo_images
-            $image = $request->file('image');
-            $filename = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
-            $image->move(public_path('todo_images'), $filename);
-
-            // 3. Update the path string for the database
-            $todo->image = '/todo_images/' . $filename;
+            $this->deleteImage($todo->image);
+            $todo->image = $this->storeImage($request);
         }
 
         $todo->title = $request->title ?? $todo->title;
@@ -116,10 +81,6 @@ class TodoController extends Controller
         }
 
         $todo->save();
-
-        if ($todo->image) {
-            $todo->image_url = rtrim(config('app.url'), '/') . $todo->image;
-        }
 
         return response()->json([
             'success' => true,
@@ -168,10 +129,6 @@ class TodoController extends Controller
 
         $todo->restore();
 
-        if ($todo->image) {
-            $todo->image_url = rtrim(config('app.url'), '/') . $todo->image;
-        }
-
         return response()->json([
             'success' => true,
             'message' => 'Todo restored Successfully',
@@ -205,13 +162,7 @@ class TodoController extends Controller
             ], 400);
         }
 
-        if ($todo->image) {
-            $oldPath = public_path($todo->image);
-            if (File::exists($oldPath)) {
-                File::delete($oldPath);
-            }
-        }
-
+        $this->deleteImage($todo->image);
         $todo->forceDelete();
 
         return response()->json([
@@ -223,17 +174,53 @@ class TodoController extends Controller
     public function trash(Request $request)
     {
         $user = $request->user();
-        $todos = Todo::onlyTrashed()->where('user_id', $user->id)->latest()->get()->map(function ($todo) {
-            if ($todo->image) {
-                $todo->image_url = rtrim(config('app.url'), '/') . $todo->image;
-            }
-            return $todo;
-        });
+
+        $todos = Todo::onlyTrashed()
+            ->where('user_id', $user->id)
+            ->latest()
+            ->get();
 
         return response()->json([
             'success' => true,
             'message' => 'Trashed todos fetched Successfully',
             'data' => TodoResource::collection($todos),
         ]);
+    }
+
+    private function storeImage(Request $request): ?string
+    {
+        if (!$request->hasFile('image')) {
+            return null;
+        }
+
+        $image = $request->file('image');
+        $filename = now()->format('YmdHis') . '_' . Str::uuid() . '.' . $image->getClientOriginalExtension();
+
+        return $image->storePubliclyAs(self::IMAGE_DIRECTORY, $filename, self::IMAGE_DISK);
+    }
+
+    private function deleteImage(?string $path): void
+    {
+        if (!$path) {
+            return;
+        }
+
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            return;
+        }
+
+        $normalizedPath = ltrim($path, '/');
+
+        if (str_starts_with($normalizedPath, 'todo_images/')) {
+            $localPath = public_path($normalizedPath);
+
+            if (File::exists($localPath)) {
+                File::delete($localPath);
+            }
+
+            return;
+        }
+
+        Storage::disk(self::IMAGE_DISK)->delete($normalizedPath);
     }
 }
